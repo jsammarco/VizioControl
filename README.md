@@ -8,6 +8,13 @@ Tested on a **Vizio V505-G9** with firmware **2.600.596.0-10**. Compatibility de
 
 *Animated Matrix overlay. The screenshot is hosted in this repository and referenced through an immutable GitHub raw URL.*
 
+![Meme image sent as base64 and displayed over the TV app](https://raw.githubusercontent.com/jsammarco/VizioControl/7b2b6e6666ee8c46333fff92d28ca0eb3bab3d3a/MemeAdded-Screenshot.PNG)
+
+*A second example: the image bytes are base64-encoded on the computer and sent
+inline through DevTools as an image data URL. The TV displays the temporary
+overlay without fetching the original image URL. Both local files and downloaded
+web images can use this path.*
+
 ## Tools
 
 | Script | Purpose |
