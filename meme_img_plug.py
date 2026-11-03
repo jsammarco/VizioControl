@@ -8,6 +8,7 @@ import base64
 import binascii
 import ipaddress
 import json
+from pathlib import Path
 import socket
 import sys
 import time
@@ -51,6 +52,12 @@ def normalize_image_source(value):
     if declared_mime is not None and declared_mime != mime:
         raise ValueError(f'Data URL MIME type does not match the image; expected {mime}')
     return f'data:{mime};base64,{payload}'
+
+
+def image_file_source(path):
+    """Embed the original bytes; preserve GIF animation and detect the MIME type."""
+    payload = Path(path).expanduser().read_bytes()
+    return normalize_image_source(base64.b64encode(payload).decode('ascii'))
 
 
 def overlay_expression(url=IMAGE_URL, remove=False):
@@ -146,8 +153,11 @@ def main(argv=None):
     parser.add_argument('--host', type=ipaddress.IPv4Address, default='192.168.50.233')
     parser.add_argument('--port', type=int, help='Skip discovery and use this known debugger port')
     parser.add_argument('--target', help='Page title/URL substring if multiple pages are exposed')
-    parser.add_argument('--image-url', default=IMAGE_URL,
+    source = parser.add_mutually_exclusive_group()
+    source.add_argument('--image-url', default=IMAGE_URL,
                         help='HTTPS URL, base64 image data URL, or raw base64')
+    source.add_argument('--image-file', type=Path,
+                        help='Local GIF, PNG, JPEG, or WebP file; automatically base64 encoded')
     parser.add_argument('--remove', action='store_true', help='Remove this script\'s overlay instead')
     parser.add_argument('--replay', action='store_true', help='Repeat historical status requests before scanning')
     parser.add_argument('--full', action='store_true', help='Use conservative scan timing')
@@ -156,8 +166,9 @@ def main(argv=None):
         parser.error('--port must be between 1 and 65535')
     if not args.remove:
         try:
-            args.image_url = normalize_image_source(args.image_url)
-        except ValueError as exc:
+            args.image_url = (image_file_source(args.image_file) if args.image_file is not None
+                              else normalize_image_source(args.image_url))
+        except (ValueError, OSError) as exc:
             parser.error(str(exc))
     try:
         import websocket

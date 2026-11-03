@@ -78,6 +78,20 @@ python meme_img_plug.py --host YOUR_TV_IP
 python meme_img_plug.py --host YOUR_TV_IP --remove
 ```
 
+Pass a local image or animated GIF to encode and display it automatically:
+
+```powershell
+python meme_img_plug.py --host YOUR_TV_IP --image-file "C:\Pictures\matrix.gif"
+python meme_img_plug.py --host YOUR_TV_IP --image-file "C:\Pictures\my image.png"
+```
+
+`--image-file` supports GIF, PNG, JPEG, and WebP. It reads the file, detects the
+format from its contents, base64-encodes the original bytes, and sends a data URL
+directly to the TV. GIF frames and transparency are preserved; the image is not
+uploaded to a hosting service or added to the repository. Choose either
+`--image-file` or `--image-url`. Missing or unsupported files fail before scanning
+or connecting to the TV.
+
 The script discovers the debugger, connects directly to its page WebSocket, and inserts one uniquely identified image. It uses fixed positioning, **100% viewport height and width**, `object-fit: contain`, and **z-index 2147483647**. Pointer events pass through, and successful image loading and element dimensions are checked.
 
 The default `IMAGE_URL` near the top of the script contains an embedded animated GIF. Accepted sources are:

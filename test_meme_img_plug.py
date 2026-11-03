@@ -1,11 +1,45 @@
 import json
 import base64
 import unittest
+from pathlib import Path
+import tempfile
 from unittest.mock import Mock, patch
 import meme_img_plug as meme
 
 
 class MemeTests(unittest.TestCase):
+    def test_local_gif_preserves_original_bytes(self):
+        original = base64.b64decode('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7')
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'animation with spaces.gif'
+            path.write_bytes(original)
+            data_url = meme.image_file_source(path)
+        self.assertTrue(data_url.startswith('data:image/gif;base64,'))
+        self.assertEqual(base64.b64decode(data_url.split(',', 1)[1]), original)
+
+    def test_local_file_type_comes_from_contents_not_extension(self):
+        original = b'\x89PNG\r\n\x1a\n' + b'example'
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'wrong-extension.gif'
+            path.write_bytes(original)
+            self.assertTrue(meme.image_file_source(path).startswith('data:image/png;base64,'))
+            path.write_text('not an image')
+            with self.assertRaises(ValueError):
+                meme.image_file_source(path)
+
+    def test_missing_file_fails_before_network(self):
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.object(meme.discovery, 'scan') as scan, \
+             patch('sys.stderr'):
+            with self.assertRaises(SystemExit) as error:
+                meme.main(['--image-file', str(Path(directory) / 'missing.gif')])
+        self.assertEqual(error.exception.code, 2)
+        scan.assert_not_called()
+
+    def test_file_and_url_are_mutually_exclusive(self):
+        with patch('sys.stderr'), self.assertRaises(SystemExit):
+            meme.main(['--image-file', 'image.gif', '--image-url', 'https://example.com/x.png'])
+
     def test_raw_gif_is_wrapped_in_correct_data_url(self):
         raw = base64.b64encode(b'GIF89a' + b'\x01\x00\x01\x00' + b'\x00\x00\x00;').decode()
         self.assertEqual(meme.normalize_image_source(raw), 'data:image/gif;base64,' + raw)
