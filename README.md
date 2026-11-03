@@ -96,7 +96,7 @@ The script discovers the debugger, connects directly to its page WebSocket, and 
 
 The default `IMAGE_URL` near the top of the script contains an embedded animated GIF. Accepted sources are:
 
-- HTTPS image URLs.
+- HTTP or HTTPS image URLs: downloaded on your computer and automatically encoded as base64.
 - Complete data URLs such as `data:image/gif;base64,...`.
 - Raw base64: validated and wrapped with the detected GIF, PNG, JPEG, or WebP MIME type.
 
@@ -107,7 +107,13 @@ python meme_img_plug.py --host YOUR_TV_IP --target Paramount
 python meme_img_plug.py --host YOUR_TV_IP --replay
 ```
 
-For long base64 values, edit the quoted `IMAGE_URL` string rather than passing it through Windows command-line arguments. HTTPS images are fetched by the TV without an app referrer; base64 images are sent inline. GIF animation is handled by the TV browser.
+For long base64 values, edit the quoted `IMAGE_URL` string rather than passing it through Windows command-line arguments. Web images are downloaded on your computer, validated, base64-encoded, and sent inline to the TV, just like local files. The TV does not need access to the original image host. Original bytes, including GIF frames and transparency, are preserved.
+
+Web downloads follow ordinary HTTP redirects, use a 20-second socket timeout and
+a 20 MiB size limit, and verify HTTPS certificates normally. Browser cookies and
+TV/app credentials are not sent to the image host. Use a direct image URL, not an
+HTML page containing an image. GIF animation is handled by the TV browser, and
+the page must allow `data:` images.
 
 The overlay disappears on page reload/app restart. Re-running reuses its element; `--remove` removes only that element. Multiple exposed pages require `--target`. Omit `--port` to rediscover after an app restart.
 

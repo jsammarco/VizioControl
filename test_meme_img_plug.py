@@ -8,6 +8,48 @@ import meme_img_plug as meme
 
 
 class MemeTests(unittest.TestCase):
+    def test_web_image_is_downloaded_and_encoded_byte_for_byte(self):
+        original = base64.b64decode('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7')
+        response = Mock()
+        response.headers = {'Content-Length': str(len(original))}
+        response.read.return_value = original
+        response.__enter__ = Mock(return_value=response)
+        response.__exit__ = Mock(return_value=False)
+        url = 'https://example.com/animation.gif?size=large&version=1'
+        with patch.object(meme.urllib.request, 'urlopen', return_value=response) as download:
+            result = meme.prepare_image_source(url)
+        self.assertTrue(result.startswith('data:image/gif;base64,'))
+        self.assertEqual(base64.b64decode(result.split(',', 1)[1]), original)
+        self.assertEqual(download.call_args.args[0].full_url, url)
+        self.assertEqual(download.call_args.kwargs['timeout'], 20)
+
+    def test_web_html_and_oversized_downloads_are_rejected(self):
+        response = Mock()
+        response.__enter__ = Mock(return_value=response)
+        response.__exit__ = Mock(return_value=False)
+        response.headers = {}
+        response.read.return_value = b'<html>Not an image</html>'
+        with patch.object(meme.urllib.request, 'urlopen', return_value=response):
+            with self.assertRaisesRegex(ValueError, 'recognized'):
+                meme.prepare_image_source('https://example.com/page')
+            response.headers = {'Content-Length': str(meme.MAX_IMAGE_BYTES + 1)}
+            response.read.reset_mock()
+            with self.assertRaisesRegex(ValueError, '20 MiB'):
+                meme.prepare_image_source('https://example.com/large.gif')
+            response.read.assert_not_called()
+            response.headers = {}
+            response.read.return_value = b'x' * (meme.MAX_IMAGE_BYTES + 1)
+            with self.assertRaisesRegex(ValueError, '20 MiB'):
+                meme.prepare_image_source('https://example.com/chunked.gif')
+
+    def test_embedded_source_does_not_download_anything(self):
+        raw = base64.b64encode(b'GIF89a' + b'\x01\x00\x01\x00').decode()
+        with patch.object(meme.urllib.request, 'urlopen') as download:
+            self.assertEqual(meme.prepare_image_source(raw), 'data:image/gif;base64,' + raw)
+            self.assertEqual(meme.prepare_image_source('data:image/gif;base64,' + raw),
+                             'data:image/gif;base64,' + raw)
+        download.assert_not_called()
+
     def test_local_gif_preserves_original_bytes(self):
         original = base64.b64decode('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7')
         with tempfile.TemporaryDirectory() as directory:
