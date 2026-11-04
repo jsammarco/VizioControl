@@ -262,6 +262,9 @@ python vizio_talkback.py --host YOUR_TV_IP --say "Hello Joe." --auto-disable
 # Or choose an explicit delay after the request is accepted:
 python vizio_talkback.py --host YOUR_TV_IP --say "Hello Joe." --disable-after 10
 
+# Owner-confirmed on V505-G9: Slow speech with a six-second shutoff delay:
+python vizio_talkback.py --host YOUR_TV_IP --say ". Hello Joe. How are you" --rate Slow --disable-after 6
+
 # Read status separately; do not combine --status with --say/--auto-disable:
 python vizio_talkback.py --host YOUR_TV_IP --status
 python vizio_talkback.py --host YOUR_TV_IP --options
@@ -302,7 +305,10 @@ choose 1-3600 seconds, enough for the full utterance. The delay starts after the
 native playback request is accepted. Switching Talk Back off immediately may
 cut off the queued speech: an immediate-off test was not audible to the owner,
 while a **10-second delayed** test was heard in full. The script's live delayed
-test also verified Talk Back Off and native speech disabled afterward.
+test also verified Talk Back Off and native speech disabled afterward. The owner
+subsequently confirmed audible playback on the V505-G9 with the Slow/six-second
+example above. Six seconds is specific to that short test phrase; longer text
+can require a longer delay or `--auto-disable`.
 Results explicitly report `speechCompletionVerified: false` and the timing
 method, rather than claiming exact completion detection.
 
@@ -353,8 +359,10 @@ The same TV discovery/menu options are supported, including `--list-tvs`,
 `--scan-subnet`, and `--bind`; use `--port` to bypass debugger discovery or
 `--target` to select an exposed page. Live verification confirmed native Talk Back
 **On**, the **Fast** setting followed by restoration to **Normal**, and acceptance
-of speech playback through this script. A live V505-G9 test also accepted the speech request and verified automatic shutoff using its older menu layout. Audible playback through the same
-settings/speech path was confirmed by the TV owner before scripting it.
+of speech playback through this script. A live V505-G9 test also accepted the
+speech request and verified automatic shutoff using its older menu layout.
+Audible playback was confirmed by the TV owner on both models, including the
+scripted Slow/six-second example on the V505-G9.
 
 ## Remote buttons: DevTools and PIN-paired control
 
