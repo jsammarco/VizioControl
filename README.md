@@ -2,7 +2,7 @@
 
 Python tools for controlling Vizio SmartCast TVs, finding their changing Chrome DevTools ports, and adding temporary image or animated GIF overlays to running web apps.
 
-Tested on a **Vizio V505-G9** with firmware **2.600.596.0-10**. Compatibility depends on the model, firmware, and app.
+Tested on a **Vizio V505-G9** with firmware **2.600.596.0-10**. The DevTools bridge was also tested with **Paramount+ on a Vizio V705-H3**. Compatibility depends on the model, firmware, and app.
 
 ![Matrix GIF overlay on the TV app](https://raw.githubusercontent.com/jsammarco/VizioControl/f69691dd72b3d1983db79eee812dedc889c2b489/MatrixGifAdded-Screenshot.PNG)
 
@@ -21,6 +21,7 @@ web images can use this path.*
 | --- | --- |
 | `vizio.py` | Pair, read device information, control power and inputs, and send remote buttons. |
 | `rediscover_devtools.py` | Find an existing DevTools listener, cache its port, and watch for changes. |
+| `devtools_bridge.py` | Connect Chrome through a loopback-only bridge when the TV rejects browser WebSocket origins or advertises a broken frontend link. |
 | `meme_img_plug.py` | Add/remove an image or GIF through a direct DevTools WebSocket connection, without opening Chrome. |
 
 Use with devices and apps you own or are authorized to test. This is an independent project, not an official Vizio tool.
@@ -77,6 +78,51 @@ python rediscover_devtools.py --host YOUR_TV_IP --ports 45667
 The scanner **does not enable debugging**. Existing listeners have been observed for Paramount+, Peacock, and Vizio's web video player. Ports and target IDs can change when app instances restart; static Home may expose none. The exact trigger remains unconfirmed, and replaying status requests does not reliably create a listener.
 
 Watch mode opens a fresh discovery page when it finds a new listener; it does not repair a disconnected inspector window. Fast successes are partial scans, explicitly recorded with `scan_complete`, `ports_scanned`, and `ports_in_range`.
+
+## Connect Chrome through the local DevTools bridge
+
+Some TVs expose a working debugger but supply unusable links on their discovery
+page. On the V705-H3 running Paramount+, the advertised frontend revision was
+`@000000...` and returned **404**. A working hosted frontend loaded, but its
+WebSocket handshake received **403 Forbidden** because the TV rejected its
+browser `Origin`. A direct connection without that header succeeded.
+
+First find the current debugger port:
+
+```powershell
+python rediscover_devtools.py --host YOUR_TV_IP
+```
+
+Then start the bridge, replacing `34363` with the port just discovered:
+
+```powershell
+python devtools_bridge.py --host YOUR_TV_IP --port 34363 --listen 9345 --open
+```
+
+Keep this process running while using DevTools. `--open` opens a working pinned
+hosted frontend in Chrome, with its WebSocket pointed at `127.0.0.1:9345`.
+The script prints both hosted and bundled DevTools URLs. If Chrome is not found
+in the usual Windows install locations, open the printed hosted URL manually.
+Omit `--listen` to choose an available local port automatically. The bridge uses
+only the Python standard library.
+
+The bridge binds exclusively to **127.0.0.1**. It validates the request Host and
+browser Origin, permits only debugger paths advertised by the selected TV at
+startup, and omits `Origin` on the upstream WebSocket handshake. It relays CDP
+traffic without recording its contents or changing TV settings. The hosted
+frontend runs in your browser; the TV connection travels through your local
+bridge. No Chrome security flags or TV launch-flag changes are required.
+
+The first inspectable page is opened. Discovery metadata is captured at startup;
+if the app restarts or changes its port/target ID, stop the bridge with **Ctrl+C**,
+rediscover, and restart it. It does not enable a missing debugger or automatically
+follow app restarts. A 404 for a debugger target can indicate stale metadata.
+The pinned frontend worked in this session; other TV browser versions may need
+a compatible frontend. The printed bundled URL is another option.
+
+The direct Python overlay client already uses `suppress_origin=True`, so it can
+connect without this browser bridge. PIN pairing for normal SmartCast control
+remains separate.
 
 ## Image and GIF overlays without Chrome
 
@@ -180,6 +226,8 @@ The TV's vendor HTTPS certificate does not match its LAN IP. The local API clien
 | Symptom | What to check |
 | --- | --- |
 | No debugger | TV on, app/video player running, correct address. Try `--full`; the current state may expose no listener. |
+| Discovery link returns 404 | An invalid all-zero frontend revision may be advertised. Use `devtools_bridge.py --open` with the current debugger port. |
+| Frontend loads but WebSocket receives 403 | The TV may reject the browser Origin. Use the loopback bridge and keep it running. |
 | Inspector disconnected | App instances may restart with a new port and target ID. Rediscover or use watch mode. |
 | HTTP 403 for inputs/settings | Complete PIN pairing for normal control. |
 | Image fails to load | Source format, network access, and the page's image policy. |
@@ -191,7 +239,7 @@ The TV's vendor HTTPS certificate does not match its LAN IP. The local API clien
 python -m unittest -v
 ```
 
-Tests cover pairing prerequisites, input validation/hashes, redaction, cached/early-exit discovery, watch replay/reconnection, CDP response handling, target selection, and image validation. They do not send live control commands or modify a TV.
+Tests cover pairing prerequisites, input validation/hashes, redaction, cached/early-exit discovery, watch replay/reconnection, CDP response handling, target selection, and image validation. Bridge tests use a local simulated debugger to check metadata rewriting, WebSocket forwarding, Origin removal, and rejection of unexpected origins/targets. Tests do not send live control commands or modify a TV.
 
 ## References
 
