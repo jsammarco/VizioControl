@@ -1,0 +1,188 @@
+[
+  {
+    "name": "Hulu",
+    "NAME_SPACE": 2,
+    "APP_ID": "3",
+    "MESSAGE": null
+  },
+  {
+    "name": "Prime Video",
+    "NAME_SPACE": 2,
+    "APP_ID": "4",
+    "MESSAGE": null
+  },
+  {
+    "name": "Crackle",
+    "NAME_SPACE": 2,
+    "APP_ID": "5",
+    "MESSAGE": null
+  },
+  {
+    "name": "iHeartRadio",
+    "NAME_SPACE": 2,
+    "APP_ID": "6",
+    "MESSAGE": null
+  },
+  {
+    "name": "Fandango Now",
+    "NAME_SPACE": 2,
+    "APP_ID": "7",
+    "MESSAGE": null
+  },
+  {
+    "name": "Plex",
+    "NAME_SPACE": 2,
+    "APP_ID": "9",
+    "MESSAGE": null
+  },
+  {
+    "name": "NBC",
+    "NAME_SPACE": 2,
+    "APP_ID": "10",
+    "MESSAGE": null
+  },
+  {
+    "name": "Baeble",
+    "NAME_SPACE": 2,
+    "APP_ID": "11",
+    "MESSAGE": null
+  },
+  {
+    "name": "Curiosity Stream",
+    "NAME_SPACE": 2,
+    "APP_ID": "12",
+    "MESSAGE": null
+  },
+  {
+    "name": "Newsy",
+    "NAME_SPACE": 2,
+    "APP_ID": "15",
+    "MESSAGE": null
+  },
+  {
+    "name": "Dove Channel",
+    "NAME_SPACE": 2,
+    "APP_ID": "16",
+    "MESSAGE": null
+  },
+  {
+    "name": "ConTV",
+    "NAME_SPACE": 2,
+    "APP_ID": "18",
+    "MESSAGE": null
+  },
+  {
+    "name": "Toon Goggles",
+    "NAME_SPACE": 2,
+    "APP_ID": "21",
+    "MESSAGE": null
+  },
+  {
+    "name": "Vudu",
+    "NAME_SPACE": 2,
+    "APP_ID": "21",
+    "MESSAGE": "https://my.vudu.com/castReceiver/index.html?launch-source=app-icon"
+  },
+  {
+    "name": "WatchFree",
+    "NAME_SPACE": 2,
+    "APP_ID": "22",
+    "MESSAGE": null
+  },
+  {
+    "name": "FilmRise",
+    "NAME_SPACE": 2,
+    "APP_ID": "24",
+    "MESSAGE": null
+  },
+  {
+    "name": "TasteIt",
+    "NAME_SPACE": 2,
+    "APP_ID": "26",
+    "MESSAGE": null
+  },
+  {
+    "name": "AsianCrush",
+    "NAME_SPACE": 2,
+    "APP_ID": "27",
+    "MESSAGE": "https://html5.asiancrush.com/?ua=viziosmartcast"
+  },
+  {
+    "name": "DAZN",
+    "NAME_SPACE": 2,
+    "APP_ID": "34",
+    "MESSAGE": null
+  },
+  {
+    "name": "Flixfling",
+    "NAME_SPACE": 2,
+    "APP_ID": "36",
+    "MESSAGE": null
+  },
+  {
+    "name": "CBS All Access",
+    "NAME_SPACE": 2,
+    "APP_ID": "37",
+    "MESSAGE": null
+  },
+  {
+    "name": "FitFusion by Jillian Michaels",
+    "NAME_SPACE": 2,
+    "APP_ID": "39",
+    "MESSAGE": null
+  },
+  {
+    "name": "Redbox",
+    "NAME_SPACE": 2,
+    "APP_ID": "41",
+    "MESSAGE": null
+  },
+  {
+    "name": "CBS CBS News",
+    "NAME_SPACE": 2,
+    "APP_ID": "42",
+    "MESSAGE": null
+  },
+  {
+    "name": "Cocoro TV",
+    "NAME_SPACE": 2,
+    "APP_ID": "55",
+    "MESSAGE": null
+  },
+  {
+    "name": "Love Destination",
+    "NAME_SPACE": 2,
+    "APP_ID": "57",
+    "MESSAGE": null
+  },
+  {
+    "name": "Haystack TV",
+    "NAME_SPACE": 0,
+    "APP_ID": "898AF734",
+    "MESSAGE": "{\"CAST_NAMESPACE\":\"urn:x-cast:com.google.cast.media\",\"CAST_MESSAGE\":{\"type\":\"LOAD\",\"media\":{},\"autoplay\":true,\"currentTime\":0,\"customData\":{\"platform\":\"sctv\"}}}"
+  },
+  {
+    "name": "XUMO",
+    "NAME_SPACE": 0,
+    "APP_ID": "36E1EA1F",
+    "MESSAGE": "{\"CAST_NAMESPACE\":\"urn:x-cast:com.google.cast.media\",\"CAST_MESSAGE\":{\"type\":\"LOAD\",\"media\":{},\"autoplay\":true,\"currentTime\":0,\"customData\":{}}}"
+  },
+  {
+    "name": "Pluto TV",
+    "NAME_SPACE": 0,
+    "APP_ID": "E6F74C01",
+    "MESSAGE": "{\"CAST_NAMESPACE\":\"urn:x-cast:tv.pluto\",\"CAST_MESSAGE\":{\"command\":\"initializePlayback\",\"channel\":\"\",\"episode\":\"\",\"time\":0}}"
+  },
+  {
+    "name": "Netflix",
+    "NAME_SPACE": 3,
+    "APP_ID": "1",
+    "MESSAGE": null
+  },
+  {
+    "name": "YouTubeTV",
+    "NAME_SPACE": 5,
+    "APP_ID": "1",
+    "MESSAGE": null
+  }
+]

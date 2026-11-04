@@ -1,2 +1,2 @@
-# Needed only by meme_img_plug.py; the control/scanner scripts use the standard library.
+# Needed by meme_img_plug.py, launch_app_devtools.py, vizio_talkback.py, and DevTools mode of remote_devtools.py.
 websocket-client>=1.6,<2

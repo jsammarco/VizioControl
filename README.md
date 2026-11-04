@@ -20,7 +20,11 @@ web images can use this path.*
 | Script | Purpose |
 | --- | --- |
 | `vizio.py` | Pair, read device information, control power and inputs, and send remote buttons. |
+| `discover_tvs.py` | Discover and identify Vizio TVs with SSDP, validated saved addresses, and an optional subnet scan; show a numbered TV menu. |
 | `rediscover_devtools.py` | Find an existing DevTools listener, cache its port, and watch for changes. |
+| `vizio_talkback.py` | Enable/disable native Talk Back, set supported speech speed, and speak text through DevTools. |
+| `remote_devtools.py` | Send named/raw remote buttons via a supported DevTools key endpoint or explicit PIN-paired HTTPS control. |
+| `launch_app_devtools.py` | Request an app launch through the current page's native Vizio bridge using both namespace and app ID. |
 | `devtools_bridge.py` | Connect Chrome through a loopback-only bridge when the TV rejects browser WebSocket origins or advertises a broken frontend link. |
 | `meme_img_plug.py` | Add/remove an image or GIF through a direct DevTools WebSocket connection, without opening Chrome. |
 
@@ -37,9 +41,61 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-Examples use `python`; activate your environment or substitute `.\.venv\Scripts\python.exe`. The overlay requires `websocket-client`; the other scripts use the standard library.
+Examples use `python`; activate your environment or substitute `.\.venv\Scripts\python.exe`. The overlay, DevTools app launcher, Talk Back tool, and DevTools mode of the remote require `websocket-client`; the other scripts and paired remote mode use the standard library.
 
-All scripts accept `--host YOUR_TV_IP`. Override the development setup's default LAN address with your TV's address.
+The control, debugger scanner, bridge, overlay, app-launcher, and DevTools remote scripts accept `--host YOUR_TV_IP`. Override the development setup's default LAN address with your TV's address. The app launcher can also discover TVs and offer a selection menu when `--host` is omitted.
+
+## Discover TVs and choose one
+
+The DevTools app launcher discovers TVs when `--host` is omitted. `--discover`
+explicitly selects this mode. It displays a numbered menu with each responding
+TV's friendly name, model, IP address, and SmartCast API port before connecting
+to the chosen TV's debugger:
+
+```powershell
+# Choose a TV, find its debugger, and request Hulu:
+python launch_app_devtools.py --discover --namespace 2 --app-id 3
+
+# A named app preset also supports the TV menu:
+python launch_app_devtools.py --app "Prime Video"
+
+# Choose a TV and only check bridge support; no app is launched:
+python launch_app_devtools.py --discover --check
+
+# List TVs and exit without a menu or launch:
+python launch_app_devtools.py --list-tvs
+```
+
+Discovery sends SSDP `M-SEARCH` requests including
+`ST: urn:schemas-kinoma-com:device:shell:1`, with `MX: 1`, plus DIAL and `ssdp:all`
+queries. Saved TV addresses in ignored `.local/` files are also rechecked.
+Every candidate must return valid Vizio device information on HTTPS port 7345
+or the older API port 9000; an arbitrary SSDP responder is not enough.
+Only the name, model, address, API port, and discovery sources are returned.
+No app is launched by TV discovery or menu selection alone.
+
+Some TVs do not answer SSDP in their current state. To find them without saved
+addresses, explicitly include your local subnet (replace the example):
+
+```powershell
+python launch_app_devtools.py --discover --scan-subnet 192.168.1.0/24 --app "Hulu"
+python discover_tvs.py --scan-subnet 192.168.1.0/24 --select
+```
+
+The optional scan checks only the two Vizio API ports and is limited to private
+IPv4 subnets of at most 1024 addresses. It does not scan every TCP port.
+Standalone `discover_tvs.py` uses only the standard library; run it with `--json`
+for machine-readable inventory, or with no arguments to print the numbered list.
+`--bind YOUR_LOCAL_IP` selects an SSDP network interface; `--discovery-timeout`
+sets its response window (default 3 seconds). Turn on TVs that do not respond.
+The live subnet fallback was verified against both test TVs without using saved
+addresses. Neither TV answered SSDP during that check.
+
+Enter a listed number to select a TV, or `q` to cancel. No default selection is
+made, including when only one TV is found. For unattended commands, use an
+explicit `--host` instead. Do not combine `--host` with `--discover`, `--list-tvs`,
+or `--scan-subnet`. A supplied `--port` must belong to the selected TV; omit it to
+find the current debugger after selection. Discovery does not enable debugging.
 
 ## Discover DevTools
 
@@ -123,6 +179,283 @@ a compatible frontend. The printed bundled URL is another option.
 The direct Python overlay client already uses `suppress_origin=True`, so it can
 connect without this browser bridge. PIN pairing for normal SmartCast control
 remains separate.
+
+## Launch an app through DevTools
+
+`launch_app_devtools.py` connects directly to an existing debugger and calls
+`VIZIO.launchApp(NAME_SPACE, APP_ID, MESSAGE, callback)` in the selected page.
+This signature was inspected in the running V705-H3 Paramount+ companion library,
+and its presence was verified with a read-only check. A successful live app switch
+has not yet been verified by this script. The current page must expose the native
+bridge; the script does not add the companion library or fall back to another API.
+
+Both **NAME_SPACE and APP_ID** are required for a manual launch:
+
+```powershell
+# Verify support without launching anything:
+python launch_app_devtools.py --host YOUR_TV_IP --port 34363 --check
+
+# Hulu: namespace 2, app ID 3:
+python launch_app_devtools.py --host YOUR_TV_IP --port 34363 --namespace 2 --app-id 3
+
+# Prime Video: namespace 2, app ID 4:
+python launch_app_devtools.py --host YOUR_TV_IP --port 34363 --namespace 2 --app-id 4
+```
+
+`--name-space` is an alias for `--namespace`. Omit `--port` to discover the
+current debugger. Use `--target` with a distinctive page title/URL substring if
+several pages are exposed. This connects directly with `Origin` suppressed, so
+the browser bridge and an open Chrome window are not needed.
+
+The supplied launch table is stored in `app_launch_catalog.json`, including its
+namespace, string app ID, and optional message. Named presets supply all three:
+
+```powershell
+python launch_app_devtools.py --list-apps
+python launch_app_devtools.py --host YOUR_TV_IP --app "Hulu"
+python launch_app_devtools.py --host YOUR_TV_IP --app "Prime Video"
+python launch_app_devtools.py --host YOUR_TV_IP --app "Pluto TV"
+```
+
+App IDs are text, preserving hexadecimal Cast IDs. `--message` accepts an optional
+URL or JSON **string**, and overrides a preset's message. For example, a manual
+Pluto TV configuration is:
+
+```powershell
+python launch_app_devtools.py --host YOUR_TV_IP --namespace 0 --app-id E6F74C01 --message '{"CAST_NAMESPACE":"urn:x-cast:tv.pluto","CAST_MESSAGE":{"command":"initializePlayback","channel":"","episode":"","time":0}}'
+```
+
+A missing message is sent as JavaScript `null`, representing `None` in the table.
+The table is historical configuration, not a live availability list. It includes
+retired/rebranded services and a duplicate namespace/app ID for Toon Goggles and
+Vudu, whose messages differ. Presets preserve those entries rather than guessing
+new identifiers. Availability depends on the TV, region, firmware, and service.
+
+The script reports a `SUCCESS` callback as an **accepted launch request**, not
+proof that the destination finished loading. Switching apps can close DevTools
+before its reply; disconnects/timeouts after sending produce **outcome unknown**
+(exit code 2). Check the TV before retrying. No automatic launch retry is made.
+It does not extract pairing tokens or print the launch message. Use `--check`
+with any launch arguments to validate support without switching apps.
+
+## Native Talk Back and text-to-speech
+
+`vizio_talkback.py` implements the speech path verified on the V705-H3. It uses
+DevTools to access the TV's own settings API, enables the real Talk Back setting,
+and sends text to the native speech service. It does not require PIN pairing or
+an open Chrome window. A compatible running app must expose a DevTools listener.
+
+```powershell
+# Discover TVs, choose one, and speak (enables native Talk Back if needed):
+python vizio_talkback.py --discover --say "Hello Joe. This is your TV speaking."
+
+# Select a TV directly; debugger discovery is automatic:
+python vizio_talkback.py --host YOUR_TV_IP --say "The speech script is ready."
+
+# Speech speed; --speed is an alias for --rate:
+python vizio_talkback.py --host YOUR_TV_IP --rate Fast --say "This is the faster speech setting."
+python vizio_talkback.py --host YOUR_TV_IP --rate Normal
+
+# Speak and automatically turn Talk Back off after an estimated playback delay:
+python vizio_talkback.py --host YOUR_TV_IP --say "Hello Joe." --auto-disable
+
+# Or choose an explicit delay after the request is accepted:
+python vizio_talkback.py --host YOUR_TV_IP --say "Hello Joe." --disable-after 10
+
+# Read status/available speeds without changing settings or speaking:
+python vizio_talkback.py --host YOUR_TV_IP --status
+python vizio_talkback.py --host YOUR_TV_IP --options
+
+# Native accessibility setting and stop control:
+python vizio_talkback.py --host YOUR_TV_IP --enable
+python vizio_talkback.py --host YOUR_TV_IP --stop
+python vizio_talkback.py --host YOUR_TV_IP --disable
+
+# Read UTF-8 text from a file; --text is an alias for --say:
+python vizio_talkback.py --host YOUR_TV_IP --text-file "C:\Notes\speech.txt"
+```
+
+The live TV offers **Slow, Normal, and Fast**. Rate names are matched without
+case sensitivity against choices retrieved from the TV. No native voice picker
+or pitch control was found in the inspected accessibility menu or speech API;
+the script does not invent voice/pitch parameters. The browser's separate Web
+Speech API reported no voices during this investigation.
+
+**Native settings persist unless automatic shutoff is requested:** speaking
+enables Talk Back, which can also cause the TV to read menus aloud. Speech-rate
+changes also affect that native setting. Use `--stop` to stop speech or `--disable`
+to switch Talk Back off. `--status` and `--options` reject combinations with
+mutations, so those checks remain read-only. Both are optional: with no
+speech/setting action, the script reads status by default.
+
+`--auto-disable` waits a conservative estimate based on text length and the
+actual Slow/Normal/Fast setting, then switches native Talk Back Off and verifies
+it. The estimate uses 90/140/190 words per minute, an allowance for long unspaced
+text, three seconds of padding, and an eight-second minimum. These are timing
+estimates, not measured voice speeds or a speech-completion event. The TV's
+`GET /app/tts/play` returned `NOT_SUPPORTED`, `/app/tts/status` returned
+`URI_NOT_FOUND`, and the SDK's TTS status listener tracks enabled state rather
+than utterance completion.
+
+`--disable-after SECONDS` overrides the estimate and implies automatic shutoff;
+choose 1-3600 seconds, enough for the full utterance. The delay starts after the
+native playback request is accepted. Switching Talk Back off immediately may
+cut off the queued speech: an immediate-off test was not audible to the owner,
+while a **10-second delayed** test was heard in full. The script's live delayed
+test also verified Talk Back Off and native speech disabled afterward.
+Results explicitly report `speechCompletionVerified: false` and the timing
+method, rather than claiming exact completion detection.
+
+Automatic cleanup also runs after a failed request once speech setup has begun,
+uses a fresh token and timeout, and reports failure if Off cannot be confirmed.
+The intentional playback delay is added to the desktop's wait budget. Keep the
+TV app open until cleanup completes: closing/restarting it destroys the page
+context and can prevent cleanup. If the connection is interrupted, verify with
+`--status` and use `--disable` as needed. Automatic shutoff turns Talk Back Off
+even if it was already On before this command; speech rate is left as selected.
+
+The actual writable endpoints are:
+
+- `/menu_native/dynamic/tv_settings/accessibility/talkback`
+- `/menu_native/dynamic/tv_settings/accessibility/speech_rate`
+
+The script validates choices through their static-menu counterparts, reads a
+fresh `HASHVAL`, writes `REQUEST: MODIFY`, and verifies the resulting values.
+`/app/tts/enabled` is checked to confirm native speech is active; writing to this
+read-only endpoint returned `READ_ONLY_ERROR`. Setting the SDK's local
+`setTextToSpeechEnabled(true)` alone had not enabled native speech on this TV.
+Actual playback uses `PUT /app/tts/play` with `{"VALUE":"text"}`; stop uses the
+companion library's single-space payload.
+
+Temporary authorization remains in a local variable inside the TV page. Only
+sanitized status returns to Python; neither credentials nor speech text are
+printed or saved by the script. Text input is limited to 20 KiB. No power-state
+queries are made. Settings may have changed before a later operation fails;
+results include confirmed changes, and interrupted writes report an unknown
+outcome without automatic replay. Read `--status` before retrying after a lost
+connection. Server acceptance does not independently prove audible output.
+
+The same TV discovery/menu options are supported, including `--list-tvs`,
+`--scan-subnet`, and `--bind`; use `--port` to bypass debugger discovery or
+`--target` to select an exposed page. Live verification confirmed native Talk Back
+**On**, the **Fast** setting followed by restoration to **Normal**, and acceptance
+of speech playback through this script. Audible playback through the same
+settings/speech path was confirmed by the TV owner before scripting it.
+
+## Remote buttons: DevTools and PIN-paired control
+
+`remote_devtools.py` supports **KEYPRESS**, **KEYDOWN**, and **KEYUP**, named
+buttons, raw codes, and multi-key sequences. It performs no power-state queries
+and implements no Wake-on-LAN. The transport must be selected explicitly for
+PIN-paired control; DevTools remains the default.
+
+### PIN-paired mode for TV-wide buttons
+
+On the tested V705-H3, the TV-local API at `127.0.0.1:7346` returns HTTP 500
+`Unhandled Exception` for the key-command route. Both slash variants failed.
+Removing the CORS obstacle did not make that route work, and the internal
+bootstrap token was rejected by the HTTPS control service as `INVALID_TOKEN`.
+Use normal PIN pairing for global buttons such as mute and volume on this TV:
+
+```powershell
+# Choose a TV, then press Volume Up through its paired SmartCast API:
+python remote_devtools.py --discover --transport paired --button volume-up
+
+# Address the TV directly:
+python remote_devtools.py --host YOUR_TV_IP --transport paired --button mute-toggle
+
+# Request/restart pairing without sending any buttons:
+python remote_devtools.py --host YOUR_TV_IP --transport paired --pair
+
+# Check an existing pairing without requesting a new code or pressing buttons:
+python remote_devtools.py --host YOUR_TV_IP --transport paired --check
+```
+
+**Pairing is never requested automatically.** If credentials are missing when a
+button is requested, or `--pair` is selected, the script first asks:
+
+```text
+TV YOUR_TV_IP: request a pairing code on the TV now? [y/N]
+```
+
+Only `y` or `yes` sends a request to display the code. Enter, `n`, cancellation,
+or EOF sends neither a pairing request nor buttons. Enter the four-digit PIN at
+the hidden prompt, or `q` to cancel the pending pairing. Pairing can temporarily
+interrupt the app display. A button command explicitly supplied on the same
+invocation is sent after successful pairing; `--pair` alone sends no buttons.
+
+Credentials are saved to the ignored per-TV file `.local/remote-YOUR_TV_IP.json`.
+An existing matching-host credential in `.local/tv.json` can be reused. A config
+for a different TV is rejected. `--config PATH` chooses another pairing file;
+`--api-port` overrides the paired HTTPS port (normally 7345). Credentials are
+plaintext local data and are never printed. The four-digit PIN is not saved.
+A rejected saved credential does not cause an automatic new pairing request;
+run `--pair` to request a new pairing, again with confirmation.
+
+This mode uses `vizio.py`'s HTTPS client and authenticated `PUT /key_command/`,
+without requiring a debugger, Chrome, or `websocket-client`. It is a separate
+transport from the DevTools path. Its pairing/button handling is covered by
+simulated tests; no live pairing or real TV buttons were sent during this fix.
+
+### DevTools mode and route checks
+
+```powershell
+# Check the actual key route with an empty KEYLIST; no buttons sent:
+python remote_devtools.py --discover --check
+
+# On firmware that accepts the TV-local key endpoint:
+python remote_devtools.py --host YOUR_TV_IP --button up right ok
+```
+
+DevTools mode evaluates JavaScript that gets temporary TV-local authorization
+from `http://127.0.0.1:7346/app/get_auth_token`, then calls the TV-local
+`PUT /key_command/`. A successful token lookup is **not** proof that key sending
+works. Every invocation first probes the key route with an empty KEYLIST. If
+that probe fails, the real buttons are not sent and the script reports the
+backend status. This was verified live on the V705-H3: HTTP 500, zero keys sent.
+
+`cdp_key_session.py` supplies narrowly scoped CORS response handling for that
+exact key URL through the current debugger session. It preserves the original
+HTTP status and is disabled when the session finishes. It does not use
+`mode: no-cors`, disable browser security globally, or turn server errors into
+successes. Only sanitized status is printed. Never log raw CDP interception
+events: they can contain authorization headers. No token or response body is
+printed or persisted by these helpers, and no token is put in a page global.
+
+Use `--port` for a known debugger or omit it to discover the current listener;
+`--target` selects among exposed pages. Both transports support TV discovery,
+`--list-tvs`, `--scan-subnet`, `--bind`, and `--discovery-timeout`.
+
+### Button names, raw codes, and sequences
+
+```powershell
+python remote_devtools.py --list-buttons
+python remote_devtools.py --host YOUR_TV_IP --transport paired --codeset 5 --code 4 --action KEYPRESS
+python remote_devtools.py --host YOUR_TV_IP --transport paired --button volume-up --action KEYDOWN
+python remote_devtools.py --host YOUR_TV_IP --transport paired --button volume-up --action KEYUP
+```
+
+Use KEYUP to release a button previously held with KEYDOWN. The default action
+is KEYPRESS. Multiple names create one ordered KEYLIST. For mixed actions, save
+a JSON array or an object containing only `KEYLIST`, for example:
+
+```json
+{"KEYLIST":[
+  {"CODESET":5,"CODE":1,"ACTION":"KEYPRESS"},
+  {"CODESET":5,"CODE":0,"ACTION":"KEYPRESS"}
+]}
+```
+
+```powershell
+python remote_devtools.py --host YOUR_TV_IP --transport paired --sequence-file buttons.json
+```
+
+Sequences are limited to 100 commands and 64 KiB files; no per-key delays are
+inserted. Input is validated before connecting. Named buttons include navigation,
+home/back/menu, play/pause, volume, mute, input cycling, channels, and power.
+An accepted API response does not prove the current app acted on the button.
+A lost response after sending is reported as **outcome unknown** (exit code 2),
+with no automatic retry. DevTools mode cannot wake a TV whose debugger is off.
 
 ## Image and GIF overlays without Chrome
 
@@ -239,7 +572,7 @@ The TV's vendor HTTPS certificate does not match its LAN IP. The local API clien
 python -m unittest -v
 ```
 
-Tests cover pairing prerequisites, input validation/hashes, redaction, cached/early-exit discovery, watch replay/reconnection, CDP response handling, target selection, and image validation. Bridge tests use a local simulated debugger to check metadata rewriting, WebSocket forwarding, Origin removal, and rejection of unexpected origins/targets. Tests do not send live control commands or modify a TV.
+Tests cover pairing prerequisites, input validation/hashes, redaction, cached/early-exit discovery, watch replay/reconnection, CDP response handling, target selection, and image validation. Bridge tests use a local simulated debugger to check metadata rewriting, WebSocket forwarding, Origin removal, and rejection of unexpected origins/targets. Launcher tests cover paired identifiers, preset messages, hexadecimal IDs, CDP replies, and callback outcomes; optional JavaScript behavior tests use Node.js when installed. TV discovery tests cover SSDP queries, candidate validation/deduplication, bounded subnet scans, explicit menu selection, cancellation, and listing without debugger commands. Remote tests cover button mappings, action/sequence validation, scoped CORS handling, backend error preservation, empty-list readiness checks, explicit pairing consent/cancellation, host-bound credentials, exact key payloads, and interrupted requests. Talk Back tests cover read-only status, validated rates, fresh setting hashes, enabling before speech, text/file validation, injection-safe text, credential/text omission, stopping, rejected writes, lost replies, fixed/estimated automatic shutoff, cleanup failure, and fresh authorization for cleanup. Tests do not send live control commands or modify a TV.
 
 ## References
 
