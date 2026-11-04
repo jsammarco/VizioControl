@@ -1,2 +1,5 @@
 # Needed by meme_img_plug.py, launch_app_devtools.py, vizio_talkback.py, and DevTools mode of remote_devtools.py.
 websocket-client>=1.6,<2
+
+# Google Cast video playback (compatible with this project's Python 3.9+ baseline).
+PyChromecast>=13.1,<14

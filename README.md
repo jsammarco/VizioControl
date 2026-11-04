@@ -1,6 +1,6 @@
 # VizioControl
 
-Python tools for controlling Vizio SmartCast TVs, finding their changing Chrome DevTools ports, and adding temporary image or animated GIF overlays to running web apps.
+Python tools for controlling Vizio SmartCast TVs, casting videos, finding their changing Chrome DevTools ports, speaking text with native Talk Back, and adding temporary image or animated GIF overlays to running web apps.
 
 Tested on a **Vizio V505-G9** with firmware **2.600.596.0-10**. The DevTools bridge was also tested with **Paramount+ on a Vizio V705-H3**. Compatibility depends on the model, firmware, and app.
 
@@ -19,6 +19,7 @@ web images can use this path.*
 
 | Script | Purpose |
 | --- | --- |
+| `cast_video.py` | Cast a video URL or selected local file through Google Cast, without a SmartCast pairing code or DevTools token. |
 | `vizio.py` | Pair, read device information, control power and inputs, and send remote buttons. |
 | `discover_tvs.py` | Discover and identify Vizio TVs with SSDP, validated saved addresses, and an optional subnet scan; show a numbered TV menu. |
 | `rediscover_devtools.py` | Find an existing DevTools listener, cache its port, and watch for changes. |
@@ -41,7 +42,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-Examples use `python`; activate your environment or substitute `.\.venv\Scripts\python.exe`. The overlay, DevTools app launcher, Talk Back tool, and DevTools mode of the remote require `websocket-client`; the other scripts and paired remote mode use the standard library.
+Examples use `python`; activate your environment or substitute `.\.venv\Scripts\python.exe`. The overlay, DevTools app launcher, Talk Back tool, and DevTools mode of the remote require `websocket-client`. Video casting requires `PyChromecast` (the project pins the Python-compatible 13.x API). The remaining tools and paired remote mode use the standard library.
 
 The control, debugger scanner, bridge, overlay, app-launcher, and DevTools remote scripts accept `--host YOUR_TV_IP`. Override the development setup's default LAN address with your TV's address. The app launcher can also discover TVs and offer a selection menu when `--host` is omitted.
 
@@ -96,6 +97,77 @@ made, including when only one TV is found. For unattended commands, use an
 explicit `--host` instead. Do not combine `--host` with `--discover`, `--list-tvs`,
 or `--scan-subnet`. A supplied `--port` must belong to the selected TV; omit it to
 find the current debugger after selection. Discovery does not enable debugging.
+
+## Cast a video without SmartCast pairing
+
+`cast_video.py` uses Google Cast on **TCP 8009**, launching Google's Default Media
+Receiver and loading media through the Cast protocol. It does not read pairing
+credentials, obtain a DevTools token, request a PIN, or open Chrome. This is
+separate from the authenticated SmartCast HTTPS API used by `vizio.py` and the
+JavaScript `vizio-smart-cast` project. The TV must already have Cast available
+and be reachable on your LAN.
+
+```powershell
+# Install dependencies if needed:
+python -m pip install -r requirements.txt
+
+# Choose a TV and play a public sample (downloaded to the PC and served locally):
+python cast_video.py --discover --demo
+
+# Target a TV directly:
+python cast_video.py --host YOUR_TV_IP --demo
+
+# Cast a direct media URL that the TV can fetch:
+python cast_video.py --host YOUR_TV_IP --url "https://example.com/video.mp4"
+
+# Cast one local file:
+python cast_video.py --host YOUR_TV_IP --file "C:\Videos\clip.mp4"
+
+# A live HLS stream, with an explicit MIME type if needed:
+python cast_video.py --host YOUR_TV_IP --url "https://example.com/live.m3u8" --live --content-type application/x-mpegURL
+
+# Read Cast status without launching a receiver, or stop current Cast media:
+python cast_video.py --host YOUR_TV_IP --status
+python cast_video.py --host YOUR_TV_IP --stop
+```
+
+TV discovery and its numbered menu are shared with the other tools. `--list-tvs`,
+`--scan-subnet`, and `--bind` are supported. For a known TV, `--host` connects
+directly without mDNS discovery or a Vizio control token. `--cast-port` (alias
+`--port`) defaults to 8009 and is **not a DevTools port**. `--timeout` bounds Cast
+connection and playback confirmation waits. `--title` sets the receiver title.
+
+**Playback confirmation:** the script reports success only when the receiver
+reports **PLAYING for the requested media URL**, not merely because a receiver
+launched or an old app was already playing. Load/launch errors are distinguished
+from confirmation timeouts, and no automatic media reload is performed. Signed
+URL query strings, raw Cast messages, and device identifiers are not printed.
+
+**Local files and demo:** `cast_media_server.py` serves exactly the selected file
+on the PC's LAN interface, with byte-range support and an unpredictable media
+path. It does not expose a directory or other project files. Keep the script
+running while serving: it normally exits when playback ends or the Cast media
+changes. Ctrl+C stops serving; already-buffered playback may continue. The
+optional `--serve-seconds N` limits serving after playback starts, but stopping
+before a video is fully buffered can interrupt playback. `--bind YOUR_PC_LAN_IP`
+can select the local HTTP interface as well as SSDP discovery. The TV must be
+able to reach that PC/interface and Python's HTTP listener through the firewall.
+
+`--demo` downloads the public [Sintel trailer](https://media.w3.org/2010/05/sintel/trailer.mp4)
+into the ignored `.local/cast-demo-sintel.mp4` cache (maximum download 32 MiB)
+and serves that single cached file. Native video playback from this PC-hosted
+copy was confirmed on the V505-G9 Master TV by both Cast status and the owner
+watching the screen, without pairing or DevTools. Remote URL loads failed in
+those tests; a receiver launching by itself did not establish working video.
+The older Google-hosted sample URL also returned HTTP 403 from the PC.
+
+Direct URL mode sends the URL to the TV, which fetches it itself. Use the actual
+MP4/WebM media or HLS/DASH manifest URL rather than an HTML watch page. The script
+infers common MIME types from the extension (ignoring signed query parameters);
+use `--content-type` or `--mime` for extensionless URLs. Browser cookies and app
+login/DRM sessions are not transferred. Local file mode does not transcode; the
+file's container/codecs must be supported by the TV. A public URL working on the
+PC does not by itself establish that the TV can fetch/decode it.
 
 ## Discover DevTools
 
@@ -596,7 +668,7 @@ The TV's vendor HTTPS certificate does not match its LAN IP. The local API clien
 python -m unittest -v
 ```
 
-Tests cover pairing prerequisites, input validation/hashes, redaction, cached/early-exit discovery, watch replay/reconnection, CDP response handling, target selection, and image validation. Bridge tests use a local simulated debugger to check metadata rewriting, WebSocket forwarding, Origin removal, and rejection of unexpected origins/targets. Launcher tests cover paired identifiers, preset messages, hexadecimal IDs, CDP replies, and callback outcomes; optional JavaScript behavior tests use Node.js when installed. TV discovery tests cover SSDP queries, candidate validation/deduplication, bounded subnet scans, explicit menu selection, cancellation, and listing without debugger commands. Remote tests cover button mappings, action/sequence validation, scoped CORS handling, backend error preservation, empty-list readiness checks, explicit pairing consent/cancellation, host-bound credentials, exact key payloads, and interrupted requests. Talk Back tests cover read-only status, validated rates, fresh setting hashes, enabling before speech, text/file validation, injection-safe text, credential/text omission, stopping, rejected writes, lost replies, fixed/estimated automatic shutoff, cleanup failure, and fresh authorization for cleanup, both accessibility menu layouts, and discovery/pre-evaluation failures without false unknown-outcome warnings. Tests do not send live control commands or modify a TV.
+Tests cover pairing prerequisites, input validation/hashes, redaction, cached/early-exit discovery, watch replay/reconnection, CDP response handling, target selection, and image validation. Bridge tests use a local simulated debugger to check metadata rewriting, WebSocket forwarding, Origin removal, and rejection of unexpected origins/targets. Launcher tests cover paired identifiers, preset messages, hexadecimal IDs, CDP replies, and callback outcomes; optional JavaScript behavior tests use Node.js when installed. TV discovery tests cover SSDP queries, candidate validation/deduplication, bounded subnet scans, explicit menu selection, cancellation, and listing without debugger commands. Remote tests cover button mappings, action/sequence validation, scoped CORS handling, backend error preservation, empty-list readiness checks, explicit pairing consent/cancellation, host-bound credentials, exact key payloads, and interrupted requests. Talk Back tests cover read-only status, validated rates, fresh setting hashes, enabling before speech, text/file validation, injection-safe text, credential/text omission, stopping, rejected writes, lost replies, fixed/estimated automatic shutoff, cleanup failure, and fresh authorization for cleanup, both accessibility menu layouts, and discovery/pre-evaluation failures without false unknown-outcome warnings. Cast tests cover media validation, matching playback confirmation, receiver/load failures, no automatic reload, read-only status, stop handling, signed-URL privacy, local file ranges, and rejection of unrelated file paths. Tests do not send live control commands or modify a TV.
 
 ## References
 
