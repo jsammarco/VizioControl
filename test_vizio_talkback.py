@@ -6,7 +6,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import vizio_talkback as talkback
 
@@ -196,6 +196,57 @@ globalThis.fetch=async(url,options={})=>{
         out=self.run_js(self.config('--say','Hello'),'no_layout')
         self.assertEqual(out['result']['status'],'accessibility_menu_not_found')
         self.assertFalse(any(c['method']=='PUT' for c in out['calls']))
+
+
+
+    def test_no_tvs_is_reported_without_unknown_outcome_or_debugger_access(self):
+        output=io.StringIO()
+        with patch.object(talkback.tv_discovery,'discover_tvs',return_value=([],[])),patch.object(talkback,'choose_target') as choose,contextlib.redirect_stdout(output),contextlib.redirect_stderr(output):
+            code=talkback.main(['--discover','--say','Hello','--auto-disable'])
+        self.assertEqual(code,1)
+        self.assertIn('No responding Vizio TVs found',output.getvalue())
+        self.assertIn('no speech request sent',output.getvalue())
+        self.assertNotIn('Outcome unknown',output.getvalue())
+        choose.assert_not_called()
+
+    def test_discovery_exception_is_not_misreported_as_uncertain_speech(self):
+        output=io.StringIO()
+        with patch.object(talkback.tv_discovery,'discover_tvs',side_effect=ValueError),patch.object(talkback,'evaluate') as evaluate,contextlib.redirect_stdout(output),contextlib.redirect_stderr(output):
+            code=talkback.main(['--discover','--say','Hello'])
+        self.assertEqual(code,1)
+        self.assertIn('TV discovery failed (ValueError)',output.getvalue())
+        self.assertNotIn('Outcome unknown',output.getvalue())
+        evaluate.assert_not_called()
+
+    def test_page_selection_failure_is_before_any_tv_operation(self):
+        output=io.StringIO()
+        with patch.object(talkback,'choose_target',side_effect=ValueError),patch.object(talkback,'evaluate') as evaluate,contextlib.redirect_stderr(output):
+            code=talkback.main(['--host','192.168.1.10','--port','12345','--say','Hello'])
+        self.assertEqual(code,1)
+        self.assertIn('DevTools page selection failed',output.getvalue())
+        self.assertNotIn('Outcome unknown',output.getvalue())
+        evaluate.assert_not_called()
+
+    def test_lost_reply_after_evaluation_starts_retains_unknown_outcome(self):
+        output=io.StringIO();ws=Mock()
+        with patch.object(talkback,'choose_target',return_value={'webSocketDebuggerUrl':'ws://192.168.1.10:12345/devtools/page/test'}),patch.object(talkback.discovery,'remember_ports'),patch.object(talkback.socket,'create_connection'),patch('websocket.create_connection',return_value=ws),patch.object(talkback,'evaluate',side_effect=TimeoutError),contextlib.redirect_stderr(output):
+            code=talkback.main(['--host','192.168.1.10','--port','12345','--say','Hello'])
+        self.assertEqual(code,2)
+        self.assertIn('TV operation failed',output.getvalue())
+        self.assertIn('Outcome unknown',output.getvalue())
+        ws.close.assert_called_once()
+
+    def test_status_error_does_not_claim_mutation(self):
+        output=io.StringIO();ws=Mock()
+        with patch.object(talkback,'choose_target',return_value={'webSocketDebuggerUrl':'ws://192.168.1.10:12345/devtools/page/test'}),patch.object(talkback.discovery,'remember_ports'),patch.object(talkback.socket,'create_connection'),patch('websocket.create_connection',return_value=ws),patch.object(talkback,'evaluate',side_effect=ValueError),contextlib.redirect_stderr(output):
+            code=talkback.main(['--host','192.168.1.10','--port','12345','--status'])
+        self.assertEqual(code,1)
+        self.assertNotIn('Outcome unknown',output.getvalue())
+        self.assertIn('no speech request sent',output.getvalue())
+
+    def test_combined_status_error_includes_standalone_command(self):
+        with self.assertRaisesRegex(ValueError,'--discover --status'):
+            self.config('--say','Hello','--auto-disable','--status')
 
 
 if __name__=='__main__':unittest.main()

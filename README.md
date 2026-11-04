@@ -262,7 +262,7 @@ python vizio_talkback.py --host YOUR_TV_IP --say "Hello Joe." --auto-disable
 # Or choose an explicit delay after the request is accepted:
 python vizio_talkback.py --host YOUR_TV_IP --say "Hello Joe." --disable-after 10
 
-# Read status/available speeds without changing settings or speaking:
+# Read status separately; do not combine --status with --say/--auto-disable:
 python vizio_talkback.py --host YOUR_TV_IP --status
 python vizio_talkback.py --host YOUR_TV_IP --options
 
@@ -342,6 +342,12 @@ queries are made. Settings may have changed before a later operation fails;
 results include confirmed changes, and interrupted writes report an unknown
 outcome without automatic replay. Read `--status` before retrying after a lost
 connection. Server acceptance does not independently prove audible output.
+
+Discovery failures are reported before any speech/settings action is sent. An
+unknown-outcome warning is reserved for failures after a potentially mutating
+DevTools evaluation has started, rather than merely having speech arguments on
+the command line. If no TVs respond, use a known `--host` or an explicit subnet
+scan.
 
 The same TV discovery/menu options are supported, including `--list-tvs`,
 `--scan-subnet`, and `--bind`; use `--port` to bypass debugger discovery or
@@ -566,6 +572,8 @@ The TV's vendor HTTPS certificate does not match its LAN IP. The local API clien
 
 | Symptom | What to check |
 | --- | --- |
+| No responding Vizio TVs found | No speech or settings command was sent. Turn the TV on, try `--scan-subnet CIDR` or `--bind YOUR_LOCAL_IP`, or bypass TV discovery with `--host YOUR_TV_IP`. |
+| Talk Back `--status` usage error | Run `python vizio_talkback.py --host YOUR_TV_IP --status` separately from `--say`, `--auto-disable`, or setting changes. |
 | No debugger | TV on, app/video player running, correct address. Try `--full`; the current state may expose no listener. |
 | Discovery link returns 404 | An invalid all-zero frontend revision may be advertised. Use `devtools_bridge.py --open` with the current debugger port. |
 | Frontend loads but WebSocket receives 403 | The TV may reject the browser Origin. Use the loopback bridge and keep it running. |
@@ -580,7 +588,7 @@ The TV's vendor HTTPS certificate does not match its LAN IP. The local API clien
 python -m unittest -v
 ```
 
-Tests cover pairing prerequisites, input validation/hashes, redaction, cached/early-exit discovery, watch replay/reconnection, CDP response handling, target selection, and image validation. Bridge tests use a local simulated debugger to check metadata rewriting, WebSocket forwarding, Origin removal, and rejection of unexpected origins/targets. Launcher tests cover paired identifiers, preset messages, hexadecimal IDs, CDP replies, and callback outcomes; optional JavaScript behavior tests use Node.js when installed. TV discovery tests cover SSDP queries, candidate validation/deduplication, bounded subnet scans, explicit menu selection, cancellation, and listing without debugger commands. Remote tests cover button mappings, action/sequence validation, scoped CORS handling, backend error preservation, empty-list readiness checks, explicit pairing consent/cancellation, host-bound credentials, exact key payloads, and interrupted requests. Talk Back tests cover read-only status, validated rates, fresh setting hashes, enabling before speech, text/file validation, injection-safe text, credential/text omission, stopping, rejected writes, lost replies, fixed/estimated automatic shutoff, cleanup failure, and fresh authorization for cleanup, and both accessibility menu layouts. Tests do not send live control commands or modify a TV.
+Tests cover pairing prerequisites, input validation/hashes, redaction, cached/early-exit discovery, watch replay/reconnection, CDP response handling, target selection, and image validation. Bridge tests use a local simulated debugger to check metadata rewriting, WebSocket forwarding, Origin removal, and rejection of unexpected origins/targets. Launcher tests cover paired identifiers, preset messages, hexadecimal IDs, CDP replies, and callback outcomes; optional JavaScript behavior tests use Node.js when installed. TV discovery tests cover SSDP queries, candidate validation/deduplication, bounded subnet scans, explicit menu selection, cancellation, and listing without debugger commands. Remote tests cover button mappings, action/sequence validation, scoped CORS handling, backend error preservation, empty-list readiness checks, explicit pairing consent/cancellation, host-bound credentials, exact key payloads, and interrupted requests. Talk Back tests cover read-only status, validated rates, fresh setting hashes, enabling before speech, text/file validation, injection-safe text, credential/text omission, stopping, rejected writes, lost replies, fixed/estimated automatic shutoff, cleanup failure, and fresh authorization for cleanup, both accessibility menu layouts, and discovery/pre-evaluation failures without false unknown-outcome warnings. Tests do not send live control commands or modify a TV.
 
 ## References
 

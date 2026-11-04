@@ -67,7 +67,7 @@ def operation_config(args):
         raise ValueError('--disable-after must be between 1 and 3600 seconds.')
     mutating = args.enable or args.disable or text is not None or args.stop or args.rate is not None
     if (args.status or args.options) and mutating:
-        raise ValueError('--status and --options are read-only; use them separately from speech/settings changes.')
+        raise ValueError('--status and --options are read-only; use them separately from speech/settings changes. Example: python vizio_talkback.py --discover --status')
     return {'enable': bool(args.enable or text is not None), 'disable': args.disable,
             'text': text, 'stop': args.stop, 'rate': args.rate,
             'autoDisable': bool(auto_disable), 'disableAfter': args.disable_after}
@@ -226,6 +226,8 @@ def main(argv=None):
     except ValueError as exc:
         p.error(str(exc))
     mutation_possible = config and (config['enable'] or config['disable'] or config['text'] is not None or config['stop'] or config['rate'] is not None)
+    evaluation_started = False
+    phase = 'TV discovery'
     try:
         if args.host is None:
             print('Discovering Vizio TVs...', flush=True)
@@ -236,6 +238,7 @@ def main(argv=None):
             if args.list_tvs:
                 tv_discovery.print_tvs(devices)
                 return 0 if devices else 1
+            phase = 'TV selection'
             host = tv_discovery.select_tv(devices)['host']
         else:
             host = str(args.host)
@@ -244,6 +247,7 @@ def main(argv=None):
         except ImportError:
             print('Install dependency: python -m pip install websocket-client', file=sys.stderr)
             return 1
+        phase = 'debugger discovery'
         port = args.port
         if port is None:
             result = discovery.scan(host, 1, 65535, 256, .2,
@@ -252,14 +256,19 @@ def main(argv=None):
                 print('No debugger found. Open a compatible app such as Hulu and retry.', file=sys.stderr)
                 return 1
             port = result['debuggers'][0]['port']
+        phase = 'DevTools page selection'
         target = choose_target(host, port, args.target)
         discovery.remember_ports(host, [port])
         execution_timeout = args.timeout + 5 + (cleanup_wait_budget(config) + args.timeout if config.get('autoDisable') else 0)
+        phase = 'DevTools connection'
         with socket.create_connection((host, port), timeout=6) as raw:
             ws = websocket.create_connection(target['webSocketDebuggerUrl'], socket=raw,
                                              timeout=execution_timeout, suppress_origin=True)
             try:
-                result = evaluate(ws, talkback_expression(config, args.timeout), 1, execution_timeout)
+                expression = talkback_expression(config, args.timeout)
+                phase = 'TV operation'
+                evaluation_started = True
+                result = evaluate(ws, expression, 1, execution_timeout)
             finally:
                 ws.close()
         # Result excludes credentials, text, native response bodies and page URLs.
@@ -279,17 +288,25 @@ def main(argv=None):
             print('Outcome unknown. Check TV/status before retrying; no automatic retry was made.')
             return 2
         return 1
+    except tv_discovery.NoTVsFound as exc:
+        print(str(exc), file=sys.stderr)
+        print('No TV settings changed and no speech request sent.', file=sys.stderr)
+        return 1
     except tv_discovery.SelectionCancelled as exc:
         print(str(exc))
         return 1
     except KeyboardInterrupt:
-        print('Stopped. In-page cleanup may continue while the app stays open; use --status/--disable to verify.')
+        if evaluation_started and mutation_possible:
+            print('Stopped. In-page cleanup may continue while the app stays open; use --status/--disable to verify.')
+        else:
+            print('Stopped. No TV settings changed and no speech request sent.')
         return 130
     except Exception as exc:
-        print(f'DevTools connection/evaluation failed ({type(exc).__name__}).', file=sys.stderr)
-        if mutation_possible:
+        print(f'{phase} failed ({type(exc).__name__}).', file=sys.stderr)
+        if evaluation_started and mutation_possible:
             print('Outcome unknown if an operation was sent. Reconnect and read --status before retrying.', file=sys.stderr)
             return 2
+        print('No TV settings changed and no speech request sent.', file=sys.stderr)
         return 1
 
 

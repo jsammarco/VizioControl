@@ -14,6 +14,10 @@ SSDP_TARGETS = ('urn:schemas-kinoma-com:device:shell:1',
                 'urn:dial-multiscreen-org:service:dial:1', 'ssdp:all')
 
 
+class NoTVsFound(ValueError):
+    """Discovery found no currently responding TVs; no control command was sent."""
+
+
 class SelectionCancelled(ValueError):
     pass
 
@@ -134,7 +138,7 @@ def print_tvs(devices):
 
 def select_tv(devices, input_fn=None):
     if not devices:
-        raise ValueError('No responding Vizio TVs found. Turn the TV on, try --scan-subnet CIDR, or use --host.')
+        raise NoTVsFound('No responding Vizio TVs found. Turn the TV on, try --scan-subnet CIDR, or use --host YOUR_TV_IP.')
     print_tvs(devices)
     read = input_fn or input
     while True:
