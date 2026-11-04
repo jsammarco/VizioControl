@@ -43,6 +43,14 @@ globalThis.fetch=async(url,options={})=>{
  const payload=options.body?JSON.parse(options.body):null;
  calls.push({path,method,payload});
  if(path==='/app/get_auth_token')return ok({ITEM:{VALUE:'FAKE_TTS_AUTH'}});
+ const modern='/menu_native/dynamic/tv_settings/accessibility';
+ const legacy='/menu_native/dynamic/tv_settings/system/accessibility';
+ if(path===modern||path===legacy){
+   if(MODE==='layout_auth_failure')return {ok:false,status:403,json:async()=>({STATUS:{RESULT:'REQUIRES_PAIRING'}})};
+   if(MODE==='no_layout'||(MODE==='legacy'&&path===modern))return {ok:true,status:200,json:async()=>({STATUS:{RESULT:'URI_NOT_FOUND'}})};
+   return ok({ITEMS:[{CNAME:'talkback',TYPE:'T_LIST_V1'},{CNAME:'speech_rate',TYPE:'T_LIST_V1'}]});
+ }
+ if(MODE==='legacy'&&path.startsWith('/menu_native/')&&!path.includes('/system/accessibility/'))throw Error('wrong menu layout');
  if(path.includes('/static/')){
    const key=path.split('/').pop();return ok({ITEMS:[{CNAME:key,ELEMENTS:key==='talkback'?['Off','On']:['Slow','Normal','Fast']}]});
  }
@@ -164,6 +172,30 @@ globalThis.fetch=async(url,options={})=>{
         self.assertTrue(out['result']['cleanupFailed'])
         self.assertFalse(out['result']['autoDisabled'])
         self.assertEqual(out['state']['talkback'],'On')
+
+
+
+    def test_legacy_layout_is_used_for_options_writes_and_auto_disable(self):
+        out=self.run_js(self.config('--say','Hello Joe','--auto-disable'),'legacy')
+        self.assertTrue(out['result']['ok'])
+        self.assertTrue(out['result']['autoDisabled'])
+        self.assertEqual(out['state']['talkback'],'Off')
+        menu_calls=[c for c in out['calls'] if c['path'].startswith('/menu_native/')]
+        self.assertEqual(menu_calls[0]['path'],'/menu_native/dynamic/tv_settings/accessibility')
+        self.assertTrue(all('/system/accessibility' in c['path'] for c in menu_calls[1:]))
+        self.assertTrue(any(c['method']=='PUT' for c in menu_calls))
+
+    def test_layout_discovery_does_not_hide_authorization_failure(self):
+        out=self.run_js(self.config('--say','Hello'),'layout_auth_failure')
+        self.assertFalse(out['result']['ok'])
+        self.assertEqual(out['result']['apiResult'],'REQUIRES_PAIRING')
+        self.assertFalse(any('/system/accessibility' in c['path'] for c in out['calls']))
+        self.assertFalse(any(c['method']=='PUT' for c in out['calls']))
+
+    def test_missing_both_layouts_makes_no_changes(self):
+        out=self.run_js(self.config('--say','Hello'),'no_layout')
+        self.assertEqual(out['result']['status'],'accessibility_menu_not_found')
+        self.assertFalse(any(c['method']=='PUT' for c in out['calls']))
 
 
 if __name__=='__main__':unittest.main()

@@ -240,7 +240,7 @@ with any launch arguments to validate support without switching apps.
 
 ## Native Talk Back and text-to-speech
 
-`vizio_talkback.py` implements the speech path verified on the V705-H3. It uses
+`vizio_talkback.py` implements the speech path verified on the V705-H3 and V505-G9. It uses
 DevTools to access the TV's own settings API, enables the real Talk Back setting,
 and sends text to the native speech service. It does not require PIN pairing or
 an open Chrome window. A compatible running app must expose a DevTools listener.
@@ -314,13 +314,21 @@ context and can prevent cleanup. If the connection is interrupted, verify with
 `--status` and use `--disable` as needed. Automatic shutoff turns Talk Back Off
 even if it was already On before this command; speech rate is left as selected.
 
-The actual writable endpoints are:
+The script detects the accessibility menu layout before changing settings:
 
-- `/menu_native/dynamic/tv_settings/accessibility/talkback`
-- `/menu_native/dynamic/tv_settings/accessibility/speech_rate`
+| Tested model | Dynamic accessibility menu |
+| --- | --- |
+| V705-H3 | `/menu_native/dynamic/tv_settings/accessibility` |
+| V505-G9 | `/menu_native/dynamic/tv_settings/system/accessibility` |
 
-The script validates choices through their static-menu counterparts, reads a
-fresh `HASHVAL`, writes `REQUEST: MODIFY`, and verifies the resulting values.
+The writable leaves are `talkback` and `speech_rate` under the selected menu.
+Their static-menu counterparts provide valid choices. The older TV returned
+`URI_NOT_FOUND` for the newer path, which previously stopped the script at
+`options_speech_rate`. The alternate known layout is tried only after that
+explicit missing-URI result; authentication, transport, and server errors are
+not hidden by fallback attempts. Options, writes, and automatic cleanup all use
+the same detected layout. The script reads a fresh `HASHVAL`, writes
+`REQUEST: MODIFY`, and verifies the resulting values.
 `/app/tts/enabled` is checked to confirm native speech is active; writing to this
 read-only endpoint returned `READ_ONLY_ERROR`. Setting the SDK's local
 `setTextToSpeechEnabled(true)` alone had not enabled native speech on this TV.
@@ -339,7 +347,7 @@ The same TV discovery/menu options are supported, including `--list-tvs`,
 `--scan-subnet`, and `--bind`; use `--port` to bypass debugger discovery or
 `--target` to select an exposed page. Live verification confirmed native Talk Back
 **On**, the **Fast** setting followed by restoration to **Normal**, and acceptance
-of speech playback through this script. Audible playback through the same
+of speech playback through this script. A live V505-G9 test also accepted the speech request and verified automatic shutoff using its older menu layout. Audible playback through the same
 settings/speech path was confirmed by the TV owner before scripting it.
 
 ## Remote buttons: DevTools and PIN-paired control
@@ -572,7 +580,7 @@ The TV's vendor HTTPS certificate does not match its LAN IP. The local API clien
 python -m unittest -v
 ```
 
-Tests cover pairing prerequisites, input validation/hashes, redaction, cached/early-exit discovery, watch replay/reconnection, CDP response handling, target selection, and image validation. Bridge tests use a local simulated debugger to check metadata rewriting, WebSocket forwarding, Origin removal, and rejection of unexpected origins/targets. Launcher tests cover paired identifiers, preset messages, hexadecimal IDs, CDP replies, and callback outcomes; optional JavaScript behavior tests use Node.js when installed. TV discovery tests cover SSDP queries, candidate validation/deduplication, bounded subnet scans, explicit menu selection, cancellation, and listing without debugger commands. Remote tests cover button mappings, action/sequence validation, scoped CORS handling, backend error preservation, empty-list readiness checks, explicit pairing consent/cancellation, host-bound credentials, exact key payloads, and interrupted requests. Talk Back tests cover read-only status, validated rates, fresh setting hashes, enabling before speech, text/file validation, injection-safe text, credential/text omission, stopping, rejected writes, lost replies, fixed/estimated automatic shutoff, cleanup failure, and fresh authorization for cleanup. Tests do not send live control commands or modify a TV.
+Tests cover pairing prerequisites, input validation/hashes, redaction, cached/early-exit discovery, watch replay/reconnection, CDP response handling, target selection, and image validation. Bridge tests use a local simulated debugger to check metadata rewriting, WebSocket forwarding, Origin removal, and rejection of unexpected origins/targets. Launcher tests cover paired identifiers, preset messages, hexadecimal IDs, CDP replies, and callback outcomes; optional JavaScript behavior tests use Node.js when installed. TV discovery tests cover SSDP queries, candidate validation/deduplication, bounded subnet scans, explicit menu selection, cancellation, and listing without debugger commands. Remote tests cover button mappings, action/sequence validation, scoped CORS handling, backend error preservation, empty-list readiness checks, explicit pairing consent/cancellation, host-bound credentials, exact key payloads, and interrupted requests. Talk Back tests cover read-only status, validated rates, fresh setting hashes, enabling before speech, text/file validation, injection-safe text, credential/text omission, stopping, rejected writes, lost replies, fixed/estimated automatic shutoff, cleanup failure, and fresh authorization for cleanup, and both accessibility menu layouts. Tests do not send live control commands or modify a TV.
 
 ## References
 

@@ -90,8 +90,7 @@ def talkback_expression(config, timeout):
     return '''(async()=>{
  const config=OPERATION;
  const base='http://127.0.0.1:7346';
- const root='/menu_native/dynamic/tv_settings/accessibility/';
- const staticRoot='/menu_native/static/tv_settings/accessibility/';
+ let root;let staticRoot;
  let controller=new AbortController();
  let timer=setTimeout(()=>controller.abort(),TIME_LIMIT);
  const changes={};let token;let stage='authorization';let writeInFlight=false;
@@ -109,6 +108,25 @@ def talkback_expression(config, timeout):
    writeInFlight=false;return d;
  }
  const items=d=>d.ITEMS||d.ITEM?.ITEMS||[];
+ async function discoverLayout(){
+   stage='discover_accessibility';
+   for(const folder of ['accessibility','system/accessibility']){
+     const dynamic='/menu_native/dynamic/tv_settings/'+folder;
+     let data;
+     try{data=await request(dynamic);}catch(e){
+       // Only an explicitly missing URI permits trying the other known layout.
+       // Authorization, server, and transport errors must remain visible.
+       if(e?.safe&&e.status==='api_error'&&e.apiResult==='URI_NOT_FOUND')continue;
+       throw e;
+     }
+     const menu=items(data);
+     if(!['talkback','speech_rate'].every(key=>menu.some(i=>i.CNAME===key&&i.TYPE==='T_LIST_V1')))
+       fail('unsupported_accessibility_menu');
+     root=dynamic+'/';staticRoot='/menu_native/static/tv_settings/'+folder+'/';
+     return;
+   }
+   fail('accessibility_menu_not_found');
+ }
  async function metadata(key){
    stage='read_'+key;const d=await request(root+key);const item=items(d).find(i=>i.CNAME===key);
    if(!item||item.TYPE!=='T_LIST_V1')fail('unsupported_setting');
@@ -132,6 +150,7 @@ def talkback_expression(config, timeout):
  try{
    const auth=await request('/app/get_auth_token');token=auth.ITEM?.VALUE;
    if(typeof token!=='string'||!token.length)fail('authorization_unavailable');
+   await discoverLayout();
    const rates=await choices('speech_rate');
    const talkbackOptions=await choices('talkback');
    let chosenRate;
